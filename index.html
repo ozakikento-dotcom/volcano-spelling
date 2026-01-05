@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Spelling Dragon Battle</title>
+
+<style>
+body{
+  font-family:"Arial Rounded MT Bold",Arial,sans-serif;
+  background:linear-gradient(#dff3ff,#ffffff);
+  text-align:center;
+  margin:0;
+  padding:12px;
+}
+
+h1{
+  font-size:42px;
+  color:#2b6cb0;
+  margin:10px 0;
+}
+
+.level{font-size:30px;}
+.dragon{font-size:100px;margin:10px 0;}
+
+/* 進捗バー */
+.hp-bar{
+  width:340px;height:28px;
+  background:#ddd;border-radius:20px;
+  margin:12px auto;overflow:hidden;
+}
+#hpFill{
+  height:100%;width:0%;
+  background:linear-gradient(to right,#4caf50,#8bc34a);
+  transition:.3s;
+}
+
+/* メインボタン */
+.listen-btn{
+  font-size:42px;
+  padding:28px 64px;
+  margin:12px;
+  border-radius:32px;
+  background:#ff9800;
+  color:white;border:none;
+}
+.listen-btn:active{background:#f57c00;}
+
+.hint-btn{
+  font-size:36px;
+  padding:24px 56px;
+  margin:12px;
+  border-radius:30px;
+  background:#9c27b0;
+  color:white;border:none;
+}
+.hint-btn:active{background:#7b1fa2;}
+
+#hint{
+  font-size:44px;
+  height:50px;
+  color:#444;
+}
+
+.progress{
+  font-size:42px;
+  color:#2e7d32;
+  min-height:48px;
+}
+
+/* アルファベット */
+.buttons button{
+  font-size:52px;
+  width:120px;height:120px;
+  margin:10px;
+  border-radius:30px;
+  border:none;
+  background:#4cafef;
+  color:white;
+  box-shadow:0 5px 0 #2196f3;
+}
+.buttons button:active{
+  transform:translateY(5px);
+  box-shadow:none;
+}
+
+/* ステッカー */
+#stickerArea{
+  display:flex;flex-wrap:wrap;
+  justify-content:center;
+  gap:14px;margin-top:14px;
+}
+#stickerArea img{
+  width:100px;border-radius:16px;
+  box-shadow:0 4px 8px rgba(0,0,0,.25);
+}
+
+/* 拡大 */
+#modal{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.7);
+  justify-content:center;align-items:center;
+  z-index:2000;
+}
+#modal img{
+  width:380px;
+  background:white;
+  border-radius:26px;
+  padding:14px;
+}
+
+/* レベルアップ */
+#levelUpEffect{
+  display:none;position:fixed;inset:0;
+  background:rgba(255,255,255,.92);
+  z-index:5000;
+  justify-content:center;align-items:center;
+  flex-direction:column;
+}
+.level-text{
+  font-size:60px;
+  color:#ff9800;
+  font-weight:bold;
+}
+.sparkles{
+  font-size:48px;
+  margin-top:12px;
+}
+
+/* リセット */
+#resetArea{
+  margin-top:30px;
+  padding-bottom:20px;
+}
+#resetBtn{
+  font-size:20px;
+  padding:14px 30px;
+  border-radius:18px;
+  background:#dddddd;
+  color:#333;border:none;
+}
+#resetHint{
+  font-size:14px;
+  color:#666;
+  margin-top:6px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🐉 スペリング ドラゴンバトル</h1>
+<div class="level">LEVEL <span id="level">1</span></div>
+<div class="dragon">🐲</div>
+
+<div class="hp-bar"><div id="hpFill"></div></div>
+
+<button class="listen-btn" onclick="speakWord()">🔊 きく</button>
+<button class="hint-btn" onclick="showHint()">💡 HINT</button>
+
+<div id="hint"></div>
+<div class="progress" id="progress"></div>
+<div class="buttons" id="buttons"></div>
+
+<h2>🎁 ステッカー</h2>
+<div id="stickerArea"></div>
+
+<!-- ステッカー拡大 -->
+<div id="modal" onclick="closeModal()">
+  <img id="modalImg">
+</div>
+
+<!-- レベルアップ演出 -->
+<div id="levelUpEffect">
+  <div class="level-text">LEVEL UP!! ⭐</div>
+  <div class="sparkles">✨ ⭐ ✨ ⭐ ✨</div>
+</div>
+
+<!-- 3秒長押しリセット -->
+<div id="resetArea">
+  <button id="resetBtn"
+    ontouchstart="startReset()"
+    ontouchend="cancelReset()"
+    onmousedown="startReset()"
+    onmouseup="cancelReset()"
+    onmouseleave="cancelReset()">
+    🔄 さいしょから
+  </button>
+  <div id="resetHint">※3びょう ながおし</div>
+</div>
+
+<script>
+/* ===== 効果音 ===== */
+const hitSound  = new Audio("hit.mp3");
+const missSound = new Audio("miss.mp3");
+const deadSound = new Audio("dead.mp3");
+
+/* ===== 音声初期化（iPad対策） ===== */
+window.speechSynthesis.onvoiceschanged = () => {
+  speechSynthesis.getVoices();
+};
+
+/* ===== 単語 ===== */
+let words=[
+// 基本よく使う単語
+  "THE","A","DO","TO","OF","SAID","SAYS","YOU","YOUR","THEY",
+  "BE","ME","HE","SHE","WE","NO",
+
+  // 動作・学校・人
+  "COME","SOME","ONE","ONCE","ASK","FRIEND","SCHOOL","PUT",
+  "ARE","WERE","WAS","HIS","HAS","I",
+
+  // 場所・方向・身近なもの
+  "GO","SO","BY","MY","HERE","THERE","WHERE","LOVE","PUSH","PULL",
+  "HOUSE","FULL","OUR","DOOR","POOR","FIND",
+
+  // 状態・形容・理由
+  "MIND","FLOOR","BECAUSE","KIND","BEHIND","WHOLE","WHY","ANY",
+  "CHILD","CHILDREN","CLIMB","ONLY","OLD","MANY",
+
+  // 形容詞・よく使う語
+  "CLOTHES","COLD","GOLD","HOLD","TOLD","EVERY","GREAT","BREAK",
+  "STEAK","BUSY","PEOPLE","PRETTY","BEAUTIFUL","AFTER","FAST","LAST",
+
+  // 時間・生活
+  "PAST","FATHER","CLASS","WATER","AGAIN","GRASS","PASS","PLANT",
+  "PATH","BATH","HOUR","MOVE","PROVE","HALF","MONEY","IMPROVE",
+
+  // そのほか（よく出る語）
+  "SUGAR","COULD","WOULD","SURE","EYE","SHOULD","WHO",
+  "MR","MRS","PARENTS","CHRISTMAS","EVERYBODY","EVEN"
+].map(w=>w.toUpperCase());
+
+let level=1;
+let levelWords=[],qIndex=0;
+let currentWord="",charIndex=0;
+let stickers=[];
+
+/* ===== 英国発音優先 ===== */
+function speakWord(){
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(currentWord);
+  u.rate=0.9;
+
+  const voices=speechSynthesis.getVoices();
+  let voice=
+    voices.find(v=>v.lang==="en-GB") ||
+    voices.find(v=>v.lang.startsWith("en-GB")) ||
+    voices.find(v=>v.lang==="en-US") ||
+    voices.find(v=>v.lang.startsWith("en-US")) ||
+    voices.find(v=>v.lang.startsWith("en"));
+
+  if(voice){u.voice=voice;u.lang=voice.lang;}
+  else{u.lang="en-GB";}
+
+  speechSynthesis.speak(u);
+}
+
+/* ===== HINT ===== */
+function showHint(){
+  const h=document.getElementById("hint");
+  h.textContent=currentWord;
+  setTimeout(()=>h.textContent="",1000);
+}
+
+/* ===== レベル処理 ===== */
+function startLevel(){
+  levelWords=[...words].sort(()=>Math.random()-0.5).slice(0,10);
+  qIndex=0;
+  startQuestion();
+}
+
+function startQuestion(){
+  currentWord=levelWords[qIndex];
+  charIndex=0;
+  document.getElementById("progress").textContent="";
+  updateProgress();
+  createButtons();
+  setTimeout(speakWord,500);
+}
+
+/* ===== ボタン生成 ===== */
+function createButtons(){
+  const area=document.getElementById("buttons");
+  area.innerHTML="";
+  let letters=currentWord.split("");
+  while(letters.length<8){
+    const c=String.fromCharCode(65+Math.floor(Math.random()*26));
+    if(!letters.includes(c)) letters.push(c);
+  }
+  letters.sort(()=>Math.random()-0.5);
+  letters.forEach(l=>{
+    const b=document.createElement("button");
+    b.textContent=l;
+    b.onclick=()=>tapLetter(l);
+    area.appendChild(b);
+  });
+}
+
+/* ===== 判定 ===== */
+function tapLetter(l){
+  if(l===currentWord[charIndex]){
+    hitSound.currentTime=0;hitSound.play();
+    charIndex++;
+    document.getElementById("progress").textContent=
+      currentWord.slice(0,charIndex);
+
+    if(charIndex===currentWord.length){
+      qIndex++;
+      updateProgress();
+      if(qIndex>=10){
+        deadSound.currentTime=0;deadSound.play();
+        levelUp();
+      }else{
+        startQuestion();
+      }
+    }
+  }else{
+    missSound.currentTime=0;missSound.play();
+  }
+}
+
+/* ===== 進捗 ===== */
+function updateProgress(){
+  document.getElementById("hpFill").style.width=(qIndex/10*100)+"%";
+}
+
+/* ===== レベルアップ ===== */
+function showLevelUpEffect(){
+  const e=document.getElementById("levelUpEffect");
+  e.style.display="flex";
+  setTimeout(()=>e.style.display="none",1500);
+}
+function levelUp(){
+  level++;
+  document.getElementById("level").textContent=level;
+  showLevelUpEffect();
+  addSticker(Math.floor(Math.random()*50)+1);
+  setTimeout(startLevel,1500);
+}
+
+/* ===== ステッカー ===== */
+function addSticker(n){
+  stickers.push(n);
+  const img=document.createElement("img");
+  img.src=`volst (${n}).png`;
+  img.onclick=()=>openModal(img.src);
+  document.getElementById("stickerArea").appendChild(img);
+}
+function openModal(src){
+  document.getElementById("modalImg").src=src;
+  document.getElementById("modal").style.display="flex";
+}
+function closeModal(){
+  document.getElementById("modal").style.display="none";
+}
+
+/* ===== 3秒長押しリセット ===== */
+let resetTimer=null;
+function startReset(){
+  resetTimer=setTimeout(resetAll,3000);
+}
+function cancelReset(){
+  if(resetTimer){clearTimeout(resetTimer);resetTimer=null;}
+}
+function resetAll(){
+  cancelReset();
+  if(confirm("さいしょから やりなおしますか？")){
+    localStorage.clear();
+    location.reload();
+  }
+}
+
+/* ===== 開始 ===== */
+startLevel();
+</script>
+
+</body>
+</html>
