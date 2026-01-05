@@ -259,7 +259,7 @@ function speakWord(){
 function showHint(){
   const h=document.getElementById("hint");
   h.textContent=currentWord;
-  setTimeout(()=>h.textContent="",1000);
+  setTimeout(()=>h.textContent="",400);
 }
 
 /* ===== レベル処理 ===== */
@@ -376,3 +376,4 @@ startLevel();
 
 </body>
 </html>
+
